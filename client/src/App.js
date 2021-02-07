@@ -12,15 +12,17 @@ class App extends Component {
       web3: null,
      accounts: null,
      contract: null,
-     ipfsHash:'',
+     IPFSHash:null,
       buffer:'',
       fileHashes:[],
+      verHash:null,
       verRes:''
       };
 
     this.convertToBuffer = this.convertToBuffer.bind(this);
     this.uploadFile = this.uploadFile.bind(this);
-    this.getFileHashes = this.getFileHashes.bind(this);
+    //this.getFileHashes = this.getFileHashes.bind(this);
+    this.verify = this.verify.bind(this)
     
   }
 
@@ -38,8 +40,8 @@ class App extends Component {
         deployedNetwork && deployedNetwork.address,
       );
         
-      this.setState({ web3, accounts, contract: instance }, this.getFileHashes);
-      
+      this.setState({ web3, accounts, contract: instance }, this.test);
+
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -48,28 +50,43 @@ class App extends Component {
       console.error(error);
     }
   };
-
-  getFileHashes = async () => {
-    const { accounts, contract } = this.state;
-
-    const response = await contract.methods.getHashes().call();
-    //const response = await contract.methods.get().call();
-    console.log(response)
-    // Update state with the result.
-    this.setState({ fileHashes:response });
-  };
-
-  uploadFile = async() => {
-  const { accounts, contract } = this.state;
-
+//verification function
+verify = async() =>{
+  const { accounts , contract } = this.state;
   await ipfs.add(this.state.buffer, (err, ipfsHash) => {
     console.log(err,ipfsHash);
-    //setState by setting ipfsHash to ipfsHash[0].hash 
-    this.setState({ ipfsHash:ipfsHash[0].hash });
+  this.setState({ verHash:ipfsHash[0].hash });
+  });
+  const response = await contract.methods.verfiyHash(String(this.state.verHash)).call();
+  console.log(response);
+
+}
+  
+
+//getting all the hashses
+  test = async () => {
+    const { accounts , contract } = this.state;
+    
+    const noOfFile = await contract.methods.getNo().call();
+    for(var i=noOfFile; i>=1;i--){
+      console.log("working");
+      const hash = await contract.methods.getHashFromId(i).call();
+      this.setState({
+        fileHashes:[...this.state.fileHashes,hash]
+      })
+    }
+  }
+
+//file upload function
+ uploadFile = async() => {
+  const { accounts, contract } = this.state;
+    
+  await ipfs.add(this.state.buffer, (err, ipfsHash) => {
+      console.log(err,ipfsHash);
+    this.setState({ IPFSHash:ipfsHash[0].hash });
   });
  
-  await contract.methods.uploadHash(this.state.ipfsHash).send({ from: accounts[0] });
-
+ await contract.methods.uploadHash(String(this.state.IPFSHash)).send({ from: accounts[0] });
  }
 
  captureFile =(event) => {
@@ -97,7 +114,7 @@ class App extends Component {
       <div className="App">
         <div className="nav">
           <h1>SecureDOC</h1>
-          <p>{this.state.ipfsHash} {this.state.fileHashes.length}</p>
+          <p>Total Files stored:{this.state.fileHashes.length}</p>
         </div>
         
 
@@ -106,15 +123,13 @@ class App extends Component {
             <h3>Upload new file</h3>
             <input type="file" onChange = {this.captureFile} className="file-btn" name="filename"></input>
             <button className="upload-btn" onClick={this.uploadFile}>Upload</button>
-            <button className="ver-btn" >Verify</button>
+            <button className="ver-btn" onClick={this.verify}>Verify</button>
           </div>
-          
           <div>
-            
+            {this.state.verRes}
           </div>
           <div className="fileList">
-            {this.state.fileHashes}
-            <Filecomp id="1" filename="firstfile" hash = {this.state.fileHashes[0]}/>
+            {this.state.fileHashes.map( (key , index) => <Filecomp id={index+1} hash = {key}/>)}
           </div>
         </div>
       </div>
