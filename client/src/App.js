@@ -3,29 +3,43 @@ import SimpleStorageContract from "./contracts/SimpleStorage.json";
 import getWeb3 from "./getWeb3";
 import Filecomp from "./Filecomp";
 import "./App.css";
+import ipfs from "./ipfs";
 
 class App extends Component {
-  state = { storageValue: 0, web3: null, accounts: null, contract: null };
+  constructor(){
+    super()
+    this.state = {
+      web3: null,
+     accounts: null,
+     contract: null,
+     ipfsHash:'',
+      buffer:'',
+      fileHashes:[],
+      verRes:''
+      };
+
+    this.convertToBuffer = this.convertToBuffer.bind(this);
+    this.uploadFile = this.uploadFile.bind(this);
+    this.getFileHashes = this.getFileHashes.bind(this);
+    
+  }
 
   componentDidMount = async () => {
     try {
-      // Get network provider and web3 instance.
+      
       const web3 = await getWeb3();
-
-      // Use web3 to get the user's accounts.
       const accounts = await web3.eth.getAccounts();
 
-      // Get the contract instance.
+      
       const networkId = await web3.eth.net.getId();
       const deployedNetwork = SimpleStorageContract.networks[networkId];
       const instance = new web3.eth.Contract(
         SimpleStorageContract.abi,
         deployedNetwork && deployedNetwork.address,
       );
-
-      // Set web3, accounts, and contract to the state, and then proceed with an
-      // example of interacting with the contract's methods.
-      this.setState({ web3, accounts, contract: instance }, this.runExample);
+        
+      this.setState({ web3, accounts, contract: instance }, this.getFileHashes);
+      
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -35,18 +49,45 @@ class App extends Component {
     }
   };
 
-  /*runExample = async () => {
+  getFileHashes = async () => {
     const { accounts, contract } = this.state;
 
-    // Stores a given value, 5 by default.
-    await contract.methods.set(5).send({ from: accounts[0] });
-
-    // Get the value from the contract to prove it worked.
-    const response = await contract.methods.get().call();
-
+    const response = await contract.methods.getHashes().call();
+    //const response = await contract.methods.get().call();
+    console.log(response)
     // Update state with the result.
-    this.setState({ storageValue: response });
-  };*/
+    this.setState({ fileHashes:response });
+  };
+
+  uploadFile = async() => {
+  const { accounts, contract } = this.state;
+
+  await ipfs.add(this.state.buffer, (err, ipfsHash) => {
+    console.log(err,ipfsHash);
+    //setState by setting ipfsHash to ipfsHash[0].hash 
+    this.setState({ ipfsHash:ipfsHash[0].hash });
+  });
+ 
+  await contract.methods.uploadHash(this.state.ipfsHash).send({ from: accounts[0] });
+
+ }
+
+ captureFile =(event) => {
+  event.stopPropagation()
+  event.preventDefault()
+  const file = event.target.files[0]
+  let reader = new window.FileReader()
+  reader.readAsArrayBuffer(file)
+  reader.onloadend = () => this.convertToBuffer(reader)    
+};
+
+  
+  convertToBuffer = async(reader) => {
+  //file is converted to a buffer for upload to IPFS
+    const buffer = await Buffer.from(reader.result);
+  //set this buffer -using es6 syntax
+    this.setState({buffer});
+  };
 
   render() {
     if (!this.state.web3) {
@@ -54,20 +95,26 @@ class App extends Component {
     }
     return (
       <div className="App">
-        <h1>SecureDOC</h1>
+        <div className="nav">
+          <h1>SecureDOC</h1>
+          <p>{this.state.ipfsHash} {this.state.fileHashes.length}</p>
+        </div>
+        
+
         <div className="main">
           <div className="up-div">
             <h3>Upload new file</h3>
-            <input type="file" className="file-btn" name="filename"></input>
-            <button className="upload-btn">Upload</button>
+            <input type="file" onChange = {this.captureFile} className="file-btn" name="filename"></input>
+            <button className="upload-btn" onClick={this.uploadFile}>Upload</button>
+            <button className="ver-btn" >Verify</button>
           </div>
-          <div className="ver-div">
-            <h3>Verify file</h3>
-            <input type="file" className="file-btn" name="filename"></input>
-            <button className="verify-btn">Verify</button>
+          
+          <div>
+            
           </div>
           <div className="fileList">
-            <Filecomp id="1" filename="firstfile"/>
+            {this.state.fileHashes}
+            <Filecomp id="1" filename="firstfile" hash = {this.state.fileHashes[0]}/>
           </div>
         </div>
       </div>
